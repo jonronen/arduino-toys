@@ -64,28 +64,31 @@ typedef struct partition_toc_ {
 
 static void sound_setup()
 {
-  pinMode(11, OUTPUT);
+  pinMode(6, OUTPUT);
   
-  // Set up Timer 2 to do pulse width modulation on the speaker
+  // Set up Timer 0 to do pulse width modulation on the speaker
   // pin.
   
   // Use internal clock (datasheet p.160)
   ASSR &= ~(_BV(EXCLK) | _BV(AS2));
   
+  // disable Timer0 interrupts - delay() is no longer available
+  TIMSK0 &= (~TOIE0);
+
   // Set fast PWM mode  (p.157)
-  TCCR2A |= _BV(WGM21) | _BV(WGM20);
-  TCCR2B &= ~_BV(WGM22);
+  TCCR0A |= _BV(WGM01) | _BV(WGM00);
+  TCCR0B &= ~_BV(WGM02);
   
-  // Do non-inverting PWM on pin OC2A (p.155)
-  // On the Arduino this is pin 11.
-  TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
-  TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
+  // Do non-inverting PWM on pin OC0A (p.155)
+  // On the Arduino this is pin 6.
+  TCCR0A = (TCCR0A | _BV(COM0A1)) & ~_BV(COM0A0);
+  TCCR0A &= ~(_BV(COM0B1) | _BV(COM0B0));
   
   // No prescaler (p.158)
-  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+  TCCR0B = (TCCR0B & ~(_BV(CS02) | _BV(CS01))) | _BV(CS00);
   
   // Set initial pulse width to the first sample.
-  OCR2A = 0x80;
+  OCR0A = 0x80;
   
   
   // Set up Timer 1 to send a sample every interrupt.
@@ -187,6 +190,12 @@ static void start_playing(uint32_t start_sector, uint16_t num_sectors)
 {
   uint8_t res;
 
+  Serial.print("Starting to play on sector ");
+  Serial.print(start_sector);
+  Serial.print(" for ");
+  Serial.print(num_sectors);
+  Serial.println(" sectors.");
+
   // disable interrupts
   cli();
 
@@ -220,6 +229,7 @@ static void read_next_block_if_needed()
   }
 
   if (g_buff_flags & BUFF_FLAG_SECOND_HALF) {
+    Serial.println("Fetching second half");
     res = g_sdc.readData(
       g_curr_sound_block, BUFF_HALF_SIZE, BUFF_HALF_SIZE,
       g_buff+BUFF_HALF_SIZE
@@ -235,12 +245,14 @@ static void read_next_block_if_needed()
     }
   }
   else {
+    Serial.println("Fetching first half");
     // move to next block
     g_curr_sound_block++;
     g_curr_sound_len--;
 
     // is there a next block?
     if (g_curr_sound_len == 0) {
+      Serial.println("Done playing");
       // finish playing after the current block
       g_curr_sound_block = 0;
       g_curr_sound_len = 0;
@@ -278,13 +290,12 @@ void loop()
 ISR(TIMER1_COMPA_vect)
 {
   if ((g_buff_flags & BUFF_FLAG_IS_PLAYING) || g_buff_pos) {
-    OCR2A = g_buff[
+    OCR0A = g_buff[
       (uint16_t)g_buff_pos +
       BUFF_HALF_SIZE*(g_buff_flags & BUFF_FLAG_SECOND_HALF)
     ];
     g_buff_pos++;
     if (g_buff_pos == 0) {
-      g_buff_flags ^= BUFF_FLAG_SECOND_HALF;
       g_buff_flags |= BUFF_FLAG_NEEDS_FETCH;
     }
   }

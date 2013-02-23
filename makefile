@@ -36,6 +36,12 @@ Print.o:
 Sd2Card.o:
 	avr-g++ $(GPP_FLAGS) $(ARDUINO_FILES)/libraries/SD/utility/Sd2Card.cpp
 
+random.o: random.cpp
+	avr-g++ $(GPP_FLAGS) random.cpp
+
+engine.o: engine.cpp
+	avr-g++ $(GPP_FLAGS) engine.cpp
+
 sd_test.o: sd_test.cpp
 	avr-g++ $(GPP_FLAGS) sd_test.cpp
 

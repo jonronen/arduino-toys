@@ -1,8 +1,8 @@
 #include "Arduino.h"
 #include <Sd2Card.h>
 #include "sound.h"
-#include "engine.h"
 #include "filesystem.h"
+#include "engine.h"
 
 
 static uint8_t g_play_buff[BUFF_HALF_SIZE*2];
@@ -15,9 +15,6 @@ uint16_t g_curr_sound_len;
 /* keep this for the delay functionality */
 static uint16_t g_interrupt_cnt;
 
-
-void setup();
-void loop();
 
 void sound_setup()
 {
@@ -70,19 +67,6 @@ void sound_setup()
   sei();
 }
 
-
-void setup()
-{
-  Serial.begin(115200);
-  if (init_fs()) {
-#ifdef DEBUG_FS
-    Serial.println("Error initialising filesystem");
-#endif
-    return;
-  }
-  
-  sound_setup();
-}
 
 void play_sectors(uint32_t start_sector, uint16_t num_sectors)
 {
@@ -193,19 +177,6 @@ void read_sound_block()
   sei();
 }
 
-
-void loop()
-{
-  /*
-   * we need to make sure the sound blocks are always ready.
-   * this means we don't allow reading more than one file system block
-   * between sound blocks
-   */
-  read_sound_block();
-  read_instruction_block();
-  read_sound_block();
-  process_instruction_block();
-}
 
 ISR(TIMER1_COMPA_vect)
 {

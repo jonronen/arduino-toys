@@ -18,7 +18,7 @@ static uint8_t g_i = 0;
 static uint8_t g_j = 0;
 
 
-void set_prescale(uint8_t prescale_val)
+static void set_adc_prescale(uint8_t prescale_val)
 {
   if (prescale_val == 16) {
     sbi(ADCSRA, ADPS2);
@@ -68,5 +68,15 @@ uint8_t get_rand()
   g_state[g_j] = tmp;
 
   return g_state[(g_state[g_i] + tmp) & 0xf];
+}
+
+void random_init()
+{
+  uint16_t tmp;
+
+  set_adc_prescale(32);
+  
+  tmp = analogRead(RANDOM_PIN);
+  put_key((const uint8_t*)&tmp, 2);
 }
 

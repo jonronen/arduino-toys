@@ -3,6 +3,7 @@
 #include "random.h"
 #include "sound.h"
 #include "filesystem.h"
+#include "io_pins.h"
 
 
 /* registers */
@@ -87,6 +88,32 @@ static const opcode_t g_long_opcodes[] = {
 };
 
 
+static uint8_t get_input()
+{
+  uint8_t ans = 0xff;
+  uint16_t key;
+
+  if (digitalRead(INPUT0_PIN) == 0)
+    ans = 0;
+  else if (digitalRead(INPUT1_PIN) == 0)
+    ans = 1;
+  else if (digitalRead(INPUT2_PIN) == 0)
+    ans = 2;
+  else if (digitalRead(INPUT3_PIN) == 0)
+    ans = 3;
+  else if (analogRead(INPUT4_PIN) <= 0x200) /* input4 is analog */
+    ans = 4;
+
+  if (ans != 0xff) {
+    /* there is an input. seed the random number generator */
+    key = TCNT1;
+    put_key((const uint8_t*)&key, 2);
+  }
+
+  return ans;
+}
+
+
 static opcode_t get_opcode(uint8_t ins)
 {
   opcode_t retval = g_short_opcodes[(ins & 0xf0) >> 4];
@@ -109,7 +136,14 @@ uint16_t process_instruction(
   uint8_t param1,param2,param3;
 
   if (g_f_waiting_for_input) {
-    /* TODO: see if there's an input, if not keep waiting or timeout */
+    g_regs[g_input_register] = get_input();
+    if (g_regs[g_input_register] != 0xff) {
+      g_f_waiting_for_input = 0;
+      g_delay_cnt = 0;
+    }
+    else {
+      if (g_delay_cnt) return PROCESSING_YIELD;
+    }
   }
   else if (g_delay_cnt) return PROCESSING_YIELD;
 
@@ -199,13 +233,16 @@ uint16_t process_instruction(
     param2 = ins_block[*p_block_offset] & 0x0f;
     *p_block_offset = *p_block_offset+1;
 
-    /* TODO: get the input if there is one */
-    g_delay_cnt = g_regs[param2];
+    /* get the input if there is one */
+    g_regs[param1] = get_input();
+    if (g_regs[param1] == 0xff) {
+      g_delay_cnt = g_regs[param2];
 
-    /* no input - set the delay and wait */
-    if (g_delay_cnt) {
-      g_f_waiting_for_input = 1;
-      g_input_register = param1;
+      /* no input - set the delay and wait */
+      if (g_delay_cnt) {
+        g_f_waiting_for_input = 1;
+        g_input_register = param1;
+      }
     }
     break;
   

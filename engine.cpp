@@ -1,7 +1,9 @@
 #include "Arduino.h"
+#include "engine.h"
+#include "random.h"
+#include "sound.h"
+#include "filesystem.h"
 
-
-#define BLOCK_SIZE 512
 
 /* registers */
 #define NUM_REGS 16
@@ -11,6 +13,15 @@ static uint8_t g_regs[NUM_REGS];
 #define GLOBAL_ARRAY_LEN 128
 static uint8_t g_array[GLOBAL_ARRAY_LEN];
 
+/* delay counter */
+uint8_t g_delay_cnt;
+
+/* are we in the middle of PLAY_SOUND_BLOCKING? */
+static uint8_t g_f_playing_sound_block;
+
+/* are we waiting for an input? */
+static uint8_t g_f_waiting_for_input;
+static uint8_t g_input_register;
 
 /* opcode enumerations */
 enum opcode_t {
@@ -89,150 +100,204 @@ static opcode_t get_opcode(uint8_t ins)
  * 0xffff       - error
  * 0xfffe       - yield (for delays / playbacks)
  */
-uint16_t process_instruction_block(
-  uint8_t ins_block[BLOCK_SIZE],
+uint16_t process_instruction(
+  uint8_t ins_block[CODE_BLOCK_SIZE],
   uint16_t* p_block_offset /* both input and output */
 )
 {
   opcode_t op;
   uint8_t param1,param2,param3;
 
-  while (1) {
-    if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-    
-    op = get_opcode(ins_block[*p_block_offset]);
-    switch (op) {
-    
-    case OP_SET_REG:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      g_regs[param1] = ins_block[*p_block_offset];
-      *p_block_offset = *p_block_offset+1;
-      break;
-    
-    case OP_ADD_REGS:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param3 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      g_regs[param1] = g_regs[param2] + g_regs[param3];
-      break;
-    
-    case OP_SUB_REGS:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param3 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      g_regs[param1] = g_regs[param2] - g_regs[param3];
-      break;
-    
-    case OP_MUL_REGS:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param3 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      g_regs[param1] = g_regs[param2] * g_regs[param3];
-      break;
-    
-    case OP_DIV_REGS:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param3 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      /* check for zero */
-      if (g_regs[param3] == 0) return 0xffff;
-      g_regs[param1] = g_regs[param2] / g_regs[param3];
-      break;
-    
-    case OP_LIGHT_ON:
-      /* TODO */
-      break;
-    
-    case OP_LIGHT_OFF:
-      /* TODO */
-      break;
-    
-    case OP_PLAY_SOUND:
-      /* TODO */
-      break;
-    
-    case OP_PLAY_SOUND_BLOCKING:
-      /* TODO */
-      break;
-    
-    case OP_GET_INPUT:
-      /* TODO */
-      break;
-    
-    case OP_DELAY:
-      /* TODO */
-      break;
-    
-    case OP_LOAD:
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param1 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param2 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      /* check for an invalid offset */
-      if (g_regs[param2] >= GLOBAL_ARRAY_LEN) return 0xffff;
-      g_regs[param1] = g_array[g_regs[param2]];
-      break;
-    
-    case OP_STORE:
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param1 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param2 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      /* check for an invalid offset */
-      if (g_regs[param2] >= GLOBAL_ARRAY_LEN) return 0xffff;
-      g_array[g_regs[param2]] = g_regs[param1];
-      break;
-    
-    case OP_JUMP:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      return g_regs[param1];
-      break;
-    
-    case OP_JUMP_EQUAL:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param3 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (g_regs[param1] == g_regs[param2]) return g_regs[param3];
-      break;
-    
-    case OP_JUMP_GREATER:
-      param1 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (*p_block_offset >= BLOCK_SIZE) return 0xffff;
-      param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
-      param3 = ins_block[*p_block_offset] & 0x0f;
-      *p_block_offset = *p_block_offset+1;
-      if (g_regs[param1] > g_regs[param2]) return g_regs[param3];
-      break;
-    
-    case OP_RANDOM:
-      /* TODO */
-      break;
-    default:
-      /* unknown instruction */
-      return 0xffff;
-      break;
-    }
+  if (g_f_waiting_for_input) {
+    /* TODO: see if there's an input, if not keep waiting or timeout */
   }
+  else if (g_delay_cnt) return PROCESSING_YIELD;
+
+  if (g_f_playing_sound_block &&
+      (g_play_buff_flags & BUFF_FLAG_IS_PLAYING)) {
+    /* wait till we finish playing */
+    return PROCESSING_YIELD;
+  }
+  
+  /* playing is over - clear the flag */
+  g_f_playing_sound_block = 0;
+
+  op = get_opcode(ins_block[*p_block_offset]);
+  switch (op) {
+  
+  case OP_SET_REG:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    g_regs[param1] = ins_block[*p_block_offset];
+    *p_block_offset = *p_block_offset+1;
+    break;
+  
+  case OP_ADD_REGS:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param3 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    g_regs[param1] = g_regs[param2] + g_regs[param3];
+    break;
+  
+  case OP_SUB_REGS:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param3 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    g_regs[param1] = g_regs[param2] - g_regs[param3];
+    break;
+  
+  case OP_MUL_REGS:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param3 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    g_regs[param1] = g_regs[param2] * g_regs[param3];
+    break;
+  
+  case OP_DIV_REGS:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param3 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    /* check for zero */
+    if (g_regs[param3] == 0) return PROCESSING_ERROR;
+    g_regs[param1] = g_regs[param2] / g_regs[param3];
+    break;
+  
+  case OP_LIGHT_ON:
+    /* TODO */
+    break;
+  
+  case OP_LIGHT_OFF:
+    /* TODO */
+    break;
+  
+  case OP_PLAY_SOUND_BLOCKING:
+    g_f_playing_sound_block = 1;
+    /* fall through */
+  case OP_PLAY_SOUND:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    play_sound(g_regs[param1]);
+    break;
+  
+  case OP_GET_INPUT:
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param1 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param2 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+
+    /* TODO: get the input if there is one */
+    g_delay_cnt = g_regs[param2];
+
+    /* no input - set the delay and wait */
+    if (g_delay_cnt) {
+      g_f_waiting_for_input = 1;
+      g_input_register = param1;
+    }
+    break;
+  
+  case OP_DELAY:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    g_delay_cnt = g_regs[param1];
+    break;
+  
+  case OP_LOAD:
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param1 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param2 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    /* check for an invalid offset */
+    if (g_regs[param2] >= GLOBAL_ARRAY_LEN) return PROCESSING_ERROR;
+    g_regs[param1] = g_array[g_regs[param2]];
+    break;
+  
+  case OP_STORE:
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param1 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param2 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    /* check for an invalid offset */
+    if (g_regs[param2] >= GLOBAL_ARRAY_LEN) return PROCESSING_ERROR;
+    g_array[g_regs[param2]] = g_regs[param1];
+    break;
+  
+  case OP_JUMP:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = 0;
+    return g_regs[param1];
+    break;
+  
+  case OP_JUMP_EQUAL:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param3 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (g_regs[param1] == g_regs[param2]) {
+      *p_block_offset = 0;
+      return g_regs[param3];
+    }
+    break;
+  
+  case OP_JUMP_GREATER:
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param2 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param3 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    if (g_regs[param1] > g_regs[param2]) {
+      *p_block_offset = 0;
+      return g_regs[param3];
+    }
+    break;
+  
+  case OP_RANDOM:
+    *p_block_offset = *p_block_offset+1;
+    if (*p_block_offset >= CODE_BLOCK_SIZE) return PROCESSING_ERROR;
+    param1 = (ins_block[*p_block_offset] & 0xf0) >> 4;
+    param2 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    
+    /* get the range for the randomness */
+    param3 = 1;
+    while (param3 < g_regs[param2]) {
+      param3 <<= 1;
+    }
+    while (1) {
+      /* get a random, truncate it, and make sure it's in the range */
+      g_regs[param1] = get_rand() & (param3-1);
+      if (g_regs[param1] <= g_regs[param2]) break;
+    }
+    break;
+  default:
+    /* unknown instruction */
+    return PROCESSING_ERROR;
+    break;
+  }
+
+  /*
+   * finished handling the instruction,
+   * yield to do some other stuff and
+   * continue processing other instructions afterwards
+   */
+  return PROCESSING_YIELD;
 }
 

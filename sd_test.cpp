@@ -1,68 +1,25 @@
 #include "Arduino.h"
 #include <Sd2Card.h>
+#include "sound.h"
+#include "engine.h"
+#include "filesystem.h"
 
-#define BUFF_HALF_SIZE 256
 
-static uint8_t g_buff[BUFF_HALF_SIZE*2];
-static uint8_t g_buff_pos;
+static uint8_t g_play_buff[BUFF_HALF_SIZE*2];
+static uint8_t g_play_buff_pos;
+uint8_t g_play_buff_flags;
 
-/*
- * buffer flags:
- * - bit #0: first 256 bytes of last 256 bytes
- * - bit #1: buffer should be updated
- * - bit #2: playing?
- */
-#define BUFF_FLAG_SECOND_HALF (1<<0)
-#define BUFF_FLAG_NEEDS_FETCH (1<<1)
-#define BUFF_FLAG_IS_PLAYING (1<<2)
-static uint8_t g_buff_flags;
+static uint32_t g_curr_sound_block;
+uint16_t g_curr_sound_len;
+
+/* keep this for the delay functionality */
+static uint16_t g_interrupt_cnt;
+
 
 void setup();
 void loop();
 
-static Sd2Card g_sdc;
-
-static uint32_t g_partition_start;
-static uint32_t g_partition_len;
-
-static uint16_t g_num_sounds;
-static uint32_t g_sound_table_sector;
-
-static uint32_t g_curr_sound_block;
-static uint16_t g_curr_sound_len;
-static void start_playing(uint32_t start_sector, uint16_t num_sectors);
-
-
-#define PARTITION_TYPE 0x6a
-typedef struct partition_entry_ {
-  uint8_t boot;
-  uint8_t phys_start[3];
-  uint8_t type;
-  uint8_t phys_end[3];
-  uint32_t sector_start;
-  uint32_t sector_cnt;
-} partitionEntry;
-
-typedef struct sound_entry_ {
-  uint16_t index;
-  uint16_t sector_cnt;
-  uint32_t sector_offset;
-} soundEntry;
-
-#define PARTITION_MAGIC_NUM 0x616e616d
-typedef struct partition_toc_ {
-  uint32_t magic;
-  uint16_t version;
-
-  uint16_t code_start;
-  uint16_t code_len;
-
-  uint16_t sound_table_start;
-  uint16_t num_sounds;
-} partitionToc;
-
-
-static void sound_setup()
+void sound_setup()
 {
   pinMode(6, OUTPUT);
   
@@ -116,85 +73,28 @@ static void sound_setup()
 
 void setup()
 {
-  uint8_t res, i;
-  partitionEntry* p_part;
-  partitionToc* p_toc;
-  soundEntry* p_sound_entry;
-  
-  g_sdc.init(SPI_HALF_SPEED);
-  g_sdc.partialBlockRead(1);
-  
   Serial.begin(115200);
+  if (init_fs()) {
+#ifdef DEBUG_FS
+    Serial.println("Error initialising filesystem");
+#endif
+    return;
+  }
   
-  res = g_sdc.readBlock(0, g_buff);
-  if (!res) {
-    Serial.println("Error reading partition table");
-    return;
-  }
-
-  for (i=0; i<4; i++) {
-    p_part = (partitionEntry*)&g_buff[0x1be + 0x10*i];
-    if ((p_part->boot == 0) &&
-        (p_part->type == PARTITION_TYPE)) {
-      g_partition_start = p_part->sector_start;
-      g_partition_len = p_part->sector_cnt;
-      Serial.print("Found partition #");
-      Serial.print(i);
-      Serial.print(" starting at sector ");
-      Serial.print(g_partition_start);
-      Serial.println(".");
-      break;
-    }
-  }
-  if (i==4) {
-    Serial.println("Couldn't find the partition");
-    return;
-  }
-
-  res = g_sdc.readBlock(g_partition_start, g_buff);
-  if (!res) {
-    Serial.println("Error reading partition's index block");
-    return;
-  }
-
-  p_toc = (partitionToc*)g_buff;
-  if ((p_toc->magic == PARTITION_MAGIC_NUM) &&
-      (p_toc->version == 1)) {
-    g_num_sounds = p_toc->num_sounds;
-    g_sound_table_sector = p_toc->sound_table_start + g_partition_start;
-    Serial.print("Sound table starts at sector ");
-    Serial.print(g_sound_table_sector);
-    Serial.println(".");
-  }
-  else {
-    Serial.println("Malformed sound partition");
-    return;
-  }
-
-  res = g_sdc.readBlock(g_sound_table_sector, g_buff);
-  if (!res) {
-    Serial.println("Error reading sound table");
-    return;
-  }
-
   sound_setup();
-
-  p_sound_entry = (soundEntry*)g_buff;
-  start_playing(
-    p_sound_entry->sector_offset + g_partition_start,
-    p_sound_entry->sector_cnt
-  );
 }
 
-static void start_playing(uint32_t start_sector, uint16_t num_sectors)
+void play_sectors(uint32_t start_sector, uint16_t num_sectors)
 {
   uint8_t res;
 
+#ifdef DEBUG_FS
   Serial.print("Starting to play on sector ");
   Serial.print(start_sector);
   Serial.print(" for ");
   Serial.print(num_sectors);
   Serial.println(" sectors.");
+#endif
 
   // disable interrupts
   cli();
@@ -202,16 +102,18 @@ static void start_playing(uint32_t start_sector, uint16_t num_sectors)
   g_curr_sound_block = start_sector;
   g_curr_sound_len = num_sectors;
 
-  res = g_sdc.readBlock(start_sector, g_buff);
+  res = g_sdc.readBlock(start_sector, g_play_buff);
   if (!res) {
+#ifdef DEBUG_FS
     Serial.println("Error reading first sound block");
+#endif
     g_curr_sound_block = 0;
     g_curr_sound_len = 0;
     return;
   }
   
-  g_buff_pos = 0;
-  g_buff_flags =
+  g_play_buff_pos = 0;
+  g_play_buff_flags =
     BUFF_FLAG_NEEDS_FETCH |
     BUFF_FLAG_SECOND_HALF |
     BUFF_FLAG_IS_PLAYING;
@@ -219,57 +121,67 @@ static void start_playing(uint32_t start_sector, uint16_t num_sectors)
   sei();
 }
 
-static void read_next_block_if_needed()
+void read_sound_block()
 {
   uint8_t res;
 
-  if ((g_buff_flags & (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_IS_PLAYING)) !=
+  if ((g_play_buff_flags & (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_IS_PLAYING)) !=
       (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_IS_PLAYING)) {
     return;
   }
 
-  if (g_buff_flags & BUFF_FLAG_SECOND_HALF) {
+  if (g_play_buff_flags & BUFF_FLAG_SECOND_HALF) {
+#ifdef DEBUG_FS
     Serial.println("Fetching second half");
+#endif
     res = g_sdc.readData(
       g_curr_sound_block, BUFF_HALF_SIZE, BUFF_HALF_SIZE,
-      g_buff+BUFF_HALF_SIZE
+      g_play_buff+BUFF_HALF_SIZE
     );
     if (!res) {
+#ifdef DEBUG_FS
       Serial.println("Error reading second half of block");
+#endif
       g_curr_sound_block = 0;
       g_curr_sound_len = 0;
       cli();
-      g_buff_flags = 0;
+      g_play_buff_flags = 0;
       sei();
       return;
     }
   }
   else {
+#ifdef DEBUG_FS
     Serial.println("Fetching first half");
+#endif
     // move to next block
     g_curr_sound_block++;
     g_curr_sound_len--;
 
     // is there a next block?
     if (g_curr_sound_len == 0) {
+#ifdef DEBUG_FS
       Serial.println("Done playing");
+#endif
       // finish playing after the current block
       g_curr_sound_block = 0;
       g_curr_sound_len = 0;
       cli();
-      g_buff_flags = 0;
+      g_play_buff_flags = 0;
       sei();
       return;
     }
 
     // there is a next block. read it
-    res = g_sdc.readData(g_curr_sound_block, 0, BUFF_HALF_SIZE, g_buff);
+    res = g_sdc.readData(g_curr_sound_block, 0, BUFF_HALF_SIZE, g_play_buff);
     if (!res) {
+#ifdef DEBUG_FS
       Serial.println("Error reading first half of block");
+#endif
       g_curr_sound_block = 0;
       g_curr_sound_len = 0;
       cli();
-      g_buff_flags = 0;
+      g_play_buff_flags = 0;
       sei();
       return;
     }
@@ -277,26 +189,42 @@ static void read_next_block_if_needed()
 
   // now clear the "needs fetch" bit and switch to the other half of the buffer
   cli();
-  g_buff_flags ^= (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_SECOND_HALF);
+  g_play_buff_flags ^= (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_SECOND_HALF);
   sei();
 }
 
 
 void loop()
 {
-  read_next_block_if_needed();
+  /*
+   * we need to make sure the sound blocks are always ready.
+   * this means we don't allow reading more than one file system block
+   * between sound blocks
+   */
+  read_sound_block();
+  read_instruction_block();
+  read_sound_block();
+  process_instruction_block();
 }
 
 ISR(TIMER1_COMPA_vect)
 {
-  if ((g_buff_flags & BUFF_FLAG_IS_PLAYING) || g_buff_pos) {
-    OCR0A = g_buff[
-      (uint16_t)g_buff_pos +
-      BUFF_HALF_SIZE*(g_buff_flags & BUFF_FLAG_SECOND_HALF)
+  /* handle the delay counter */
+  g_interrupt_cnt++;
+  /* delay resolution is 1/10 sec */
+  if (g_interrupt_cnt == 3200) {
+    g_interrupt_cnt = 0;
+    if (g_delay_cnt) g_delay_cnt--;
+  }
+
+  if ((g_play_buff_flags & BUFF_FLAG_IS_PLAYING) || g_play_buff_pos) {
+    OCR0A = g_play_buff[
+      (uint16_t)g_play_buff_pos +
+      BUFF_HALF_SIZE*(g_play_buff_flags & BUFF_FLAG_SECOND_HALF)
     ];
-    g_buff_pos++;
-    if (g_buff_pos == 0) {
-      g_buff_flags |= BUFF_FLAG_NEEDS_FETCH;
+    g_play_buff_pos++;
+    if (g_play_buff_pos == 0) {
+      g_play_buff_flags |= BUFF_FLAG_NEEDS_FETCH;
     }
   }
 }

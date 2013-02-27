@@ -12,8 +12,8 @@ GPP_FLAGS := -c -g -O3 -Wall -fno-exceptions -ffunction-sections -fdata-sections
 sd_test.hex: sd_test.elf
 	avr-objcopy -O ihex -R .eeprom sd_test.elf sd_test.hex
 
-sd_test.elf: sd_test.o main.o wiring.o wiring_analog.o wiring_digital.o HardwareSerial.o Sd2Card.o Print.o
-	avr-gcc -O3 -Wl,--gc-sections -mmcu=$(MCU) -o sd_test.elf sd_test.o main.o wiring.o wiring_analog.o wiring_digital.o HardwareSerial.o Sd2Card.o Print.o -lm
+sd_test.elf: sd_test.o main.o wiring.o wiring_analog.o wiring_digital.o HardwareSerial.o Sd2Card.o Print.o random.o engine.o filesystem.o
+	avr-gcc -O3 -Wl,--gc-sections -mmcu=$(MCU) -o sd_test.elf sd_test.o main.o wiring.o wiring_analog.o wiring_digital.o HardwareSerial.o Sd2Card.o Print.o engine.o random.o filesystem.o -lm
 
 main.o:
 	avr-g++ $(GPP_FLAGS) $(ARDUINO_SRCS)/main.cpp
@@ -41,6 +41,9 @@ random.o: random.cpp
 
 engine.o: engine.cpp
 	avr-g++ $(GPP_FLAGS) engine.cpp
+
+filesystem.o: filesystem.cpp
+	avr-g++ $(GPP_FLAGS) filesystem.cpp
 
 sd_test.o: sd_test.cpp
 	avr-g++ $(GPP_FLAGS) sd_test.cpp

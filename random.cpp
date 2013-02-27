@@ -1,5 +1,5 @@
 #include <Arduino.h>
-
+#include "random.h"
 
 #ifndef sbi
 #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))

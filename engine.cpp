@@ -114,6 +114,26 @@ static uint8_t get_input()
 }
 
 
+static void set_led(uint8_t led_num, uint8_t set_not_clear)
+{
+  if (led_num == 0) {
+    digitalWrite(LED0_PIN, set_not_clear);
+  }
+  else if (led_num == 1) {
+    digitalWrite(LED1_PIN, set_not_clear);
+  }
+  else if (led_num == 2) {
+    digitalWrite(LED2_PIN, set_not_clear);
+  }
+  else if (led_num == 3) {
+    digitalWrite(LED3_PIN, set_not_clear);
+  }
+  else if (led_num == 4) {
+    digitalWrite(LED4_PIN, set_not_clear);
+  }
+}
+
+
 static opcode_t get_opcode(uint8_t ins)
 {
   opcode_t retval = g_short_opcodes[(ins & 0xf0) >> 4];
@@ -210,11 +230,15 @@ uint16_t process_instruction(
     break;
   
   case OP_LIGHT_ON:
-    /* TODO */
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    set_led(g_regs[param1], HIGH);
     break;
   
   case OP_LIGHT_OFF:
-    /* TODO */
+    param1 = ins_block[*p_block_offset] & 0x0f;
+    *p_block_offset = *p_block_offset+1;
+    set_led(g_regs[param1], LOW);
     break;
   
   case OP_PLAY_SOUND_BLOCKING:

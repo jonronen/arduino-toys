@@ -4,6 +4,10 @@ import os
 import struct
 
 
+
+SAMPLE_CODE = ("100050"+"100150"+"100250"+"100350"+"71").decode("hex")
+
+
 def create_mbr(num_blocks):
     return "\x00"*0x1be + \
         "000000006a000000".decode('hex') + \
@@ -57,29 +61,56 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) == 1:
-        print "Usage: %s PCM_FILE"
+        print "Usage: %s PCM_FILE_PREFIX [CODE]"
         sys.exit()
 
-    f = open(sys.argv[1], "rb")
-    g = open(sys.argv[1]+".img", "wb")
+    if len(sys.argv) > 2:
+        code = sys.argv[2].decode('hex')
+    else:
+        code = SAMPLE_CODE
 
-    f.seek(0x2c) # start of PCM data
+    # get all the files that start with the same prefix
+    dirname = os.path.dirname(sys.argv[1]) or "."
+    file_prefix = os.path.basename(sys.argv[1])
+    dirlist = os.listdir(dirname)
+    dirlist = filter(
+        lambda x: x.startswith(file_prefix) and x.endswith(".wav"),
+        dirlist
+    )
+    dirlist = map(lambda x: dirname + "/" + x, dirlist)
 
-    file_len = os.stat(sys.argv[1]).st_size - 0x2c
-    g.write(create_mbr((file_len+511)/512 + 3))
+    dest_image = open(sys.argv[1]+".img", "wb")
+    sound_data = []
     
-    g.write(create_partition_toc("", 1))
+    for fname in dirlist:
+        file_len = os.stat(fname).st_size - 0x2c
+        f = open(fname, "rb")
+        f.seek(0x2c) # start of PCM data
+        fdata = f.read()
+        fdata += "\x00" * ((-len(fdata)) & 0x1ff)
+        sound_data.append(fdata)
+        f.close()
+
+    #
+    # TODO:
+    # change the 3 to something better,
+    # taking into account the number of sound entries
+    #
+    total_partition_blocks = \
+        3 + \
+        (len(code)+511)/512 + \
+        reduce(lambda x,y: x+len(y), sound_data, 0)
+    dest_image.write(create_mbr(total_partition_blocks))
     
-    data = f.read()
-    g.write(create_sound_entries([data]))
-    g.write(data)
+    dest_image.write(create_partition_toc(code, len(dirlist)))
 
-    # pad with zeroes to the next block
-    rem = 512-(g.tell() % 512)
-    rem %= 512
-    if rem:
-        g.write("\x00"*rem)
+    dest_image.write(code + "\x00" * (-len(code) & 0x1ff))
+    
+    dest_image.write(create_sound_entries(sound_data))
 
-    g.close()
+    for data in sound_data:
+        dest_image.write(data)
+
+    dest_image.close()
     f.close()
 

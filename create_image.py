@@ -91,25 +91,16 @@ if __name__ == "__main__":
         sound_data.append(fdata)
         f.close()
 
-    #
-    # TODO:
-    # change the 3 to something better,
-    # taking into account the number of sound entries
-    #
-    total_partition_blocks = \
-        3 + \
-        (len(code)+511)/512 + \
-        reduce(lambda x,y: x+len(y), sound_data, 0)
-    dest_image.write(create_mbr(total_partition_blocks))
-    
-    dest_image.write(create_partition_toc(code, len(dirlist)))
-
-    dest_image.write(code + "\x00" * (-len(code) & 0x1ff))
-    
-    dest_image.write(create_sound_entries(sound_data))
+    partition = create_partition_toc(code, len(dirlist))
+    partition += code + "\x00" * (-len(code) & 0x1ff)
+    partition += create_sound_entries(sound_data)
 
     for data in sound_data:
-        dest_image.write(data)
+        partition += data # no need to pad with zeroes, already padded
+
+    total_partition_blocks = len(partition)/512
+    dest_image.write(create_mbr(total_partition_blocks))
+    dest_image.write(partition)
 
     dest_image.close()
     f.close()

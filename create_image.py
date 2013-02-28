@@ -77,6 +77,7 @@ if __name__ == "__main__":
         lambda x: x.startswith(file_prefix) and x.endswith(".wav"),
         dirlist
     )
+    dirlist.sort()
     dirlist = map(lambda x: dirname + "/" + x, dirlist)
 
     dest_image = open(sys.argv[1]+".img", "wb")

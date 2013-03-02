@@ -5,6 +5,9 @@
 #include "engine.h"
 
 
+#define SOUND_FREQ 32000
+
+
 static uint8_t g_play_buff[BUFF_HALF_SIZE*2];
 static uint8_t g_play_buff_pos;
 uint8_t g_play_buff_flags;
@@ -60,7 +63,7 @@ void sound_setup()
   // Set the compare register (OCR1A).
   // OCR1A is a 16-bit register, so we have to do this with
   // interrupts disabled to be safe.
-  OCR1A = 500;    // 16e6 / 32000
+  OCR1A = (F_CPU / SOUND_FREQ);    // 16e6 / 32000 for Arduino Uno
   
   // Enable interrupt when TCNT1 == OCR1A (p.136)
   TIMSK1 |= _BV(OCIE1A);
@@ -93,6 +96,7 @@ void play_sectors(uint32_t start_sector, uint16_t num_sectors)
 #endif
     g_curr_sound_block = 0;
     g_curr_sound_len = 0;
+    sei();
     return;
   }
   
@@ -173,7 +177,7 @@ void read_sound_block()
 
   // now clear the "needs fetch" bit and switch to the other half of the buffer
   cli();
-  g_play_buff_flags ^= (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_SECOND_HALF);
+  g_play_buff_flags ^= BUFF_FLAG_NEEDS_FETCH;
   sei();
 }
 
@@ -183,7 +187,7 @@ ISR(TIMER1_COMPA_vect)
   /* handle the delay counter */
   g_interrupt_cnt++;
   /* delay resolution is 1/10 sec */
-  if (g_interrupt_cnt == 3200) {
+  if (g_interrupt_cnt == SOUND_FREQ/10) {
     g_interrupt_cnt = 0;
     if (g_delay_cnt) g_delay_cnt--;
   }
@@ -191,11 +195,11 @@ ISR(TIMER1_COMPA_vect)
   if ((g_play_buff_flags & BUFF_FLAG_IS_PLAYING) || g_play_buff_pos) {
     OCR0A = g_play_buff[
       (uint16_t)g_play_buff_pos +
-      BUFF_HALF_SIZE*(g_play_buff_flags & BUFF_FLAG_SECOND_HALF)
+      ((g_play_buff_flags & BUFF_FLAG_SECOND_HALF) ? 0 : BUFF_HALF_SIZE)
     ];
     g_play_buff_pos++;
     if (g_play_buff_pos == 0) {
-      g_play_buff_flags |= BUFF_FLAG_NEEDS_FETCH;
+      g_play_buff_flags ^= (BUFF_FLAG_NEEDS_FETCH|BUFF_FLAG_SECOND_HALF);
     }
   }
 }

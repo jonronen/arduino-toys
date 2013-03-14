@@ -51,18 +51,25 @@ void setup()
   random_init();
   sound_setup();
 
-  /* set the pins */
+  /* set the pins and pull them up */
   pinMode(INPUT0_PIN, INPUT);
+  digitalWrite(INPUT0_PIN, HIGH);
   pinMode(INPUT1_PIN, INPUT);
+  digitalWrite(INPUT1_PIN, HIGH);
   pinMode(INPUT2_PIN, INPUT);
+  digitalWrite(INPUT2_PIN, HIGH);
   pinMode(INPUT3_PIN, INPUT);
+  digitalWrite(INPUT3_PIN, HIGH);
   /* input4 is analog because we ran out of pins */
 
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
+#ifndef DEBUG_FS
+  /* pins 0 and 1 are used for serial debugging */
   pinMode(LED3_PIN, OUTPUT);
   pinMode(LED4_PIN, OUTPUT);
+#endif
 }
 
 

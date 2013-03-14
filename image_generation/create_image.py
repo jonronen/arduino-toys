@@ -26,7 +26,7 @@
 
 import os
 import struct
-
+import assembler
 
 
 SAMPLE_CODE = ("100050"+"100150"+"100250"+"100350"+"71").decode("hex")
@@ -84,14 +84,23 @@ def create_sound_entries(data_list):
 if __name__ == "__main__":
     import sys
     
-    if len(sys.argv) == 1:
-        print "Usage: %s PCM_FILE_PREFIX [CODE]"
+    if len(sys.argv) != 3:
+        print "Usage: %s PCM_FILE_PREFIX CODE_FILE"
         sys.exit()
 
-    if len(sys.argv) > 2:
-        code = sys.argv[2].decode('hex')
-    else:
-        code = SAMPLE_CODE
+    try:
+        asm_file = open(sys.argv[2], "rt")
+    except IOError, e:
+        print "Error opening %s: %s" % (sys.argv[2], e.message)
+        sys.exit()
+
+    try:
+        asm_code, num_lines = assembler.assemble_file(asm_file)
+    except ValueError, e:
+        print "Error assembling %s: %s" % (sys.argv[2], e.message)
+        sys.exit()
+
+    asm_file.close()
 
     # get all the files that start with the same prefix
     dirname = os.path.dirname(sys.argv[1]) or "."
@@ -116,8 +125,8 @@ if __name__ == "__main__":
         sound_data.append(fdata)
         f.close()
 
-    partition = create_partition_toc(code, len(dirlist))
-    partition += code + "\x00" * (-len(code) & 0x1ff)
+    partition = create_partition_toc(asm_code, len(dirlist))
+    partition += asm_code + "\x00" * (-len(asm_code) & 0x1ff)
     partition += create_sound_entries(sound_data)
 
     for data in sound_data:

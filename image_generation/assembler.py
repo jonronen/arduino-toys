@@ -25,30 +25,35 @@
 
 
 MAX_REG = 15
+BLOCK_SIZE = 512
+
 
 g_ops = {
   # NAME                    OPCODE  PARAM_TYPES
-  "SET_REG":                ("1",   ("REG", "BYTE")),
-  "ADD_REGS":               ("2",   ("REG", "REG", "REG")),
-  "SUB_REGS":               ("3",   ("REG", "REG", "REG")),
-  "MUL_REGS":               ("4",   ("REG", "REG", "REG")),
-  "DIV_REGS":               ("5",   ("REG", "REG", "REG")),
-  "LIGHT_ON":               ("6",   ("REG")),
-  "LIGHT_OFF":              ("7",   ("REG")),
-  "PLAY_SOUND":             ("8",   ("REG")),
-  "PLAY_SOUND_BLOCKING":    ("9",   ("REG")),
+  "SET_REG":                ("1",   ("REG", "BYTE_OR_STATE")),
+  "ADD_REGS":               ("001", ("REG", "REG", "REG")),
+  "SUB_REGS":               ("002", ("REG", "REG", "REG")),
+  "MUL_REGS":               ("003", ("REG", "REG", "REG")),
+  "DIV_REGS":               ("004", ("REG", "REG", "REG")),
+  "AND_REGS":               ("005", ("REG", "REG", "REG")),
+  "OR_REGS":                ("006", ("REG", "REG", "REG")),
+  "XOR_REGS":               ("007", ("REG", "REG", "REG")),
+  "LIGHT_ON":               ("2",   ("REG",)),
+  "LIGHT_OFF":              ("3",   ("REG",)),
+  "PLAY_SOUND":             ("4",   ("REG",)),
+  "PLAY_SOUND_BLOCKING":    ("5",   ("REG",)),
   "GET_INPUT":              ("01",  ("REG", "REG")),
-  "DELAY":                  ("A",   ("REG")),
+  "DELAY":                  ("6",   ("REG",)),
   "LOAD":                   ("02",  ("REG", "REG")),
   "STORE":                  ("03",  ("REG", "REG")),
-  "JUMP":                   ("B",   ("REG")),
-  "JUMP_EQUAL":             ("C",   ("REG", "REG", "REG")),
-  "JUMP_GREATER":           ("D",   ("REG", "REG", "REG")),
+  "JUMP":                   ("7",   ("REG",)),
+  "JUMP_EQUAL":             ("8",   ("REG", "REG", "REG")),
+  "JUMP_GREATER":           ("9",   ("REG", "REG", "REG")),
   "RANDOM":                 ("04",  ("REG", "REG")),
 }
 
 
-def assemble_arg(arg, argtype):
+def assemble_arg(arg, argtype, state_names):
   arg = arg.strip().lower()
 
   if argtype == "REG":
@@ -59,13 +64,16 @@ def assemble_arg(arg, argtype):
       raise ValueError("register value %d is out of bounds" % val)
     return "%x" % val
 
-  elif argtype == "BYTE":
-    val = int(arg, 0)
+  elif argtype == "BYTE_OR_STATE":
+    if arg.startswith("@") and arg[1:] in state_names:
+      val = state_names.index(arg[1:])
+    else:
+      val = int(arg, 0)
     if val<0 or val>0xff:
       raise ValueError("byte value %d is out of bounds" % val)
     return "%02x" % val
 
-def assemble_op(line):
+def assemble_op(line, state_names):
   tokens = line.strip().split(None, 1)
   if len(tokens) != 2:
     raise ValueError("expected opcode and arguments")
@@ -84,7 +92,7 @@ def assemble_op(line):
   asm_args = ""
   try:
     for i in range(len(args)):
-      asm_args += assemble_arg(args[i], g_ops[op][1][i])
+      asm_args += assemble_arg(args[i], g_ops[op][1][i], state_names)
   except ValueError, e:
     raise ValueError("error in args of %s: %s" % (op, e.message))
   
@@ -92,4 +100,92 @@ def assemble_op(line):
   result = result.decode('hex')
   
   return result
+
+def assemble_file(f):
+  result = ""
+  line_num = 0
+  state_names = []
+  current_state_block = ""
+
+  # first pass: build the state names
+  for line in f:
+    if line.strip().startswith(":"):
+      # add the state name or report an error if already exists
+      state_name = line.strip()[1:].split()[0].lower()
+      if state_name[0].isdigit():
+        raise ValueError(
+          "line %d: state %s begins with a number" % (line_num, state_name)
+        )
+      if state_name in state_names:
+        raise ValueError(
+          "line %d: state %s already exists" % (line_num, state_name)
+        )
+      state_names.append(state_name)
+      if len(state_names) > 0x100:
+        raise ValueError(
+          "too many states (state %s is already the 256th state)" % \
+          state_name
+        )
+
+  # second pass: assemble the states and concatenate them
+  f.seek(0)
+  for line in f:
+    line_num += 1
+
+    # discard empty lines and comments
+    if len(line.strip()) == 0: continue
+    if line.strip().startswith("#"): continue
+    if line.strip().startswith(";"): continue
+
+    # handle a new state
+    if line.strip().startswith(":"):
+      if current_state_block:
+        current_state_block += "\x00" * \
+            ((BLOCK_SIZE-len(current_state_block)) % BLOCK_SIZE)
+      result += current_state_block
+      current_state_block = ""
+      continue
+
+    try:
+      current_state_block += assemble_op(line, state_names)
+    except ValueError, e:
+      raise ValueError(
+        "Error in line %d: %s" % (line_num, e.message)
+      )
+
+  # when we're done, the last block is probably still not written
+  if current_state_block:
+    current_state_block += "\x00" * \
+        ((BLOCK_SIZE-len(current_state_block)) % BLOCK_SIZE)
+    result += current_state_block
+
+  return result, line_num
+
+
+if __name__ == "__main__":
+  import sys
+
+  if len(sys.argv) == 1:
+    print "Usage: %s FILE" % sys.argv[0]
+    sys.exit()
+
+  try:
+    f = open(sys.argv[1], "rt")
+  except IOError, e:
+    print "error opening %s: %s" % (sys.argv[1], e.message)
+    sys.exit()
+
+  try:
+    assembled_code, line_num = assemble_file(f)
+  except ValueError, e:
+    print "error assembling %s: %s" % (sys.argv[1], e.message)
+    sys.exit()
+
+  f.close()
+
+  out_file = open(sys.argv[1] + ".bin", "wb")
+  out_file.write(assembled_code)
+  out_file.close()
+
+  print "%d lines assembled into %s" % (line_num, sys.argv[1] + ".bin")
 

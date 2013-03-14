@@ -176,6 +176,10 @@ int8_t read_instruction_block()
 {
   uint8_t res;
 
+#ifdef DEBUG_FS
+  Serial.print("Block ");
+  Serial.println((int)g_code_block_index);
+#endif
   res = g_sdc.readBlock(g_code_sector + g_code_block_index, g_fs_buf);
   if (!res) {
 #ifdef DEBUG_FS
@@ -192,8 +196,14 @@ int8_t process_instruction_block()
   uint16_t res;
 
   res = process_instruction(g_fs_buf, &g_code_buf_offset);
-  if (res >= 0x100) return -1;
-  
+  if (res == PROCESSING_ERROR) {
+#ifdef DEBUG_FS
+    Serial.println("ERROR!");
+#endif
+    return -1;
+  }
+  else if (res < 0x100) g_code_block_index = (uint8_t)res;
+
   return 0;
 }
 

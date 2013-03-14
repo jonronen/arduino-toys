@@ -35,8 +35,8 @@ GPP_FLAGS := -c -g -O3 -Wall -fno-exceptions -ffunction-sections -fdata-sections
 toys.hex: toys.elf
 	avr-objcopy -O ihex -R .eeprom toys.elf toys.hex
 
-toys.elf: toys_main.o main.o wiring.o wiring_analog.o wiring_digital.o Sd2Card.o Print.o random.o engine.o filesystem.o sound.o
-	avr-gcc -O3 -Wl,--gc-sections -mmcu=$(MCU) -o toys.elf toys_main.o main.o wiring.o wiring_analog.o wiring_digital.o Sd2Card.o Print.o engine.o random.o filesystem.o sound.o -lm
+toys.elf: toys_main.o main.o wiring.o wiring_analog.o wiring_digital.o Sd2Card.o Print.o random.o engine.o filesystem.o sound.o HardwareSerial.o
+	avr-gcc -O3 -Wl,--gc-sections -mmcu=$(MCU) -o toys.elf toys_main.o main.o wiring.o wiring_analog.o wiring_digital.o Sd2Card.o Print.o engine.o random.o filesystem.o sound.o HardwareSerial.o -lm
 
 main.o:
 	avr-g++ $(GPP_FLAGS) $(ARDUINO_SRCS)/main.cpp

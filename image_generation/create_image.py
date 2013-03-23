@@ -85,7 +85,7 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) != 3:
-        print "Usage: %s PCM_FILE_PREFIX CODE_FILE"
+        print "Usage: %s PCM_FILE_PREFIX CODE_FILE" % sys.argv[0]
         sys.exit()
 
     try:

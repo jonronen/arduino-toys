@@ -109,6 +109,14 @@ void play_sectors(uint32_t start_sector, uint16_t num_sectors)
   Serial.println(" sectors.");
 #endif
 
+  // sanity check
+  if (num_sectors == 0) {
+#ifdef DEBUG_FS
+    Serial.println("Error: zero sectors to play. aborting.");
+#endif
+    return;
+  }
+
   // disable interrupts
   cli();
 

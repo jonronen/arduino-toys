@@ -454,7 +454,7 @@ uint16_t process_instruction(
     while (1) {
       /* get a random, truncate it, and make sure it's in the range */
       g_regs[param1] = get_rand() & (param3-1);
-      if (g_regs[param1] <= g_regs[param2]) break;
+      if (g_regs[param1] < g_regs[param2]) break;
     }
     break;
   default:

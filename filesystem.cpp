@@ -151,6 +151,15 @@ int8_t play_sound(uint8_t sound_index)
   soundEntry* p_sound_entry;
   uint8_t res;
 
+  if (sound_index >= g_num_sounds) {
+#ifdef DEBUG_FS
+    Serial.print("sound index ");
+    Serial.print((int)sound_index);
+    Serial.println(" is too high");
+#endif
+    return -1;
+  }
+
   res = g_sdc.readBlock(
     g_sound_table_sector + sound_index/SOUND_ENTRIES_IN_BLOCK,
     g_fs_buf

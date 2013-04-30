@@ -300,6 +300,42 @@ mysin_table = [
    -25,  -21,  -18,  -15,  -12,  -9,  -6,  -3 
 ]
 
+g_rand_shit = [
+  127, 245, 223, 255, 254, 255, 255, 255,
+  255, 191, 254, 255, 255, 255, 255, 223,
+  255, 191, 254, 247, 255, 255, 255, 255,
+  223, 255, 61,  255, 183, 255, 255, 255,
+  255, 191, 249, 255, 255, 245, 255, 250,
+  215, 255, 255, 255, 127, 255, 255, 255,
+  255, 223, 255, 255, 255, 255, 255, 255,
+  255, 127, 255, 254, 243, 255, 239, 255,
+  237, 255, 255, 255, 255, 247, 255, 255,
+  255, 255, 187, 255, 251, 251, 255, 223,
+  255, 253, 255, 255, 255, 255, 127, 255,
+  191, 255, 255, 255, 255, 255, 223, 255,
+  255, 251, 123, 255, 253, 254, 239, 251,
+  255, 255, 223, 255, 255, 255, 255, 255,
+  251, 255, 251, 223, 255, 231, 251, 255,
+  255, 255, 221, 255, 251, 255, 255, 223,
+  255, 219, 255, 245, 255, 255, 255, 255,
+  255, 255, 251, 255, 59,  255, 255, 223,
+  255, 191, 255, 127, 255, 223, 255, 127,
+  255, 255, 255, 255, 255, 255, 255, 119,
+  255, 255, 255, 253, 255, 255, 253, 255,
+  255, 254, 252, 247, 255, 255, 255, 62,
+  255, 251, 247, 255, 189, 255, 255, 255,
+  255, 126, 251, 253, 255, 255, 191, 255,
+  255, 127, 222, 255, 159, 255, 255, 249,
+  255, 255, 191, 255, 254, 255, 255, 255,
+  255, 207, 221, 251, 253, 255, 255, 255,
+  190, 191, 255, 255, 255, 255, 127, 255,
+  255, 243, 255, 247, 255, 255, 253, 255,
+  255, 223, 255, 255, 255, 251, 255, 255,
+  255, 191, 255, 254, 191, 255, 255, 255,
+  251, 255, 255, 191, 255, 255, 255, 255
+]
+
+
 def setup(wave_type, freq, 
           freq_ramp=0, freq_slur=0,
           lpf_base=255, lpf_ramp=0, lpf_resonance=0,
@@ -310,6 +346,7 @@ def setup(wave_type, freq,
   global g_freq_ramp, g_freq_slur, g_freq_ramp_cnt
   global g_lpf_base_freq, g_lpf_ramp, g_lpf_resonance
   global g_vib_speed, g_vib_strength
+  global g_dist_status, g_trem_status
 
   # set up the initial values for all the controls
   g_wave_type = wave_type
@@ -422,7 +459,7 @@ def next_sample():
   # tremolo adjustments
   if g_trem_status:
     # do the shit at ~16Hz
-    if g_interrupt_cnt & 0x200:
+    if g_interrupt_cnt & 0x400:
       env_vol /= 2
   
   # distortion adjustments
@@ -537,20 +574,120 @@ def next_sample():
   return (sample + 128) & 0xff
 
 
+WAVE_TYPES = ["saw", "triangle", "sine", "square"]
+
 if __name__ == "__main__":
   import sys
   from optparse import OptionParser
 
-  if len(sys.argv) < 3:
-    print "Usage: %s FREQ FILENAME" % sys.argv[0]
+  op = OptionParser()
+
+  op.add_option(
+    "-t", "--type", dest="wave_type",
+    help="wave type (possible options: %s, %s, %s, %s)" % tuple(WAVE_TYPES),
+    type="string", default="saw",
+  )
+  op.add_option(
+    "-f", "--freq", dest="freq", default=440,
+    help="wave base frequency", type="int"
+  )
+  op.add_option(
+    "--framp", dest="freq_ramp",
+    help="frequency ramp (amount of change in frequency after the base)",
+    type="int", default=0,
+  )
+  op.add_option(
+    "--fslur", dest="freq_slur",
+    help="frequency slur (amount of change in frequency before the base)",
+    type="int", default=0,
+  )
+  op.add_option(
+    "-v", "--vib-speed", dest="vib_speed",
+    help="vibrato speed", type="int", default=1,
+  )
+  op.add_option(
+    "--vib-amp", dest="vib_amp",
+    help="vibrato amplitude", type="int", default=0,
+  )
+  op.add_option(
+    "-l", "--low-pass", dest="lpf_base",
+    help="low-pass filter base frequency", type="int", default=255,
+  )
+  op.add_option(
+    "--low-pass-ramp", dest="lpf_ramp",
+    help="low-pass filter frequency ramp", type="int", default=0,
+  )
+  op.add_option(
+    "-r", "--resonance", dest="lpf_resonance",
+    help="low-pass filter resonance", type="int", default=0,
+  )
+  op.add_option(
+    "--tremolo", dest="tremolo",
+    help="add a low-frequency tremolo", action="store_true", default=False,
+  )
+  op.add_option(
+    "--distortion", dest="distort",
+    help="add distortion", action="store_true", default=False,
+  )
+
+  (options, args) = op.parse_args()
+  
+  if len(args) != 1:
+    print "Usage: %s [options] FILENAME" % sys.argv[0]
     sys.exit()
 
-  f = open(sys.argv[2], "wb")
+  if options.wave_type not in WAVE_TYPES:
+    print "unknown wave type %s. use --help for more information" % \
+      options.wave_type
+    sys.exit()
 
-  setup(wave_type=1, freq = int(sys.argv[1]))
+  if options.freq < 20 or options.freq > 14000:
+    print "wrong frequency %d. expected values are 20 to 14000" % options.freq
+    sys.exit()
+
+  if options.freq_ramp < -128 or options.freq_ramp > 127:
+    print "wrong frequency ramp %d. expected values are 0 to 255" % \
+      options.freq_ramp
+    sys.exit()
+  if options.freq_slur < 0 or options.freq_slur > 255:
+    print "wrong frequency slur %d. expected values are 0 to 255" % \
+      options.freq_slur
+    sys.exit()
+  if options.vib_speed < 0 or options.vib_speed > 255:
+    print "wrong vibrato speed %d. expected values are 0 to 255" % \
+      options.vib_speed
+    sys.exit()
+  if options.vib_amp < 0 or options.vib_amp > 255:
+    print "wrong vibrato amplitude %d. expected values are 0 to 255" % \
+      options.vib_amp
+    sys.exit()
+  if options.lpf_ramp < -128 or options.lpf_ramp > 127:
+    print "wrong low-pass ramp %d. expected values are 0 to 255" % \
+      options.lpf_ramp
+    sys.exit()
+  if options.lpf_base < 0 or options.lpf_base > 255:
+    print "wrong low-pass frequency %d. expected values are 0 to 255" % \
+      options.lpf_base
+    sys.exit()
+  if options.lpf_resonance < 0 or options.lpf_resonance > 255:
+    print "wrong resonance %d. expected values are 0 to 255" % \
+      options.lpf_resonance
+    sys.exit()
+
+  f = open(args[0], "wb")
+
+  setup(
+    wave_type=WAVE_TYPES.index(options.wave_type),
+    freq = options.freq, freq_ramp = options.freq_ramp,
+    freq_slur = options.freq_slur,
+    vib_strength = options.vib_amp, vib_speed = options.vib_speed,
+    lpf_ramp = options.lpf_ramp, lpf_base = options.lpf_base,
+    lpf_resonance = options.lpf_resonance,
+    distortion = options.distort, tremolo = options.tremolo,
+  )
 
   data = ""
-  for i in range(13000):
+  for i in range(20000):
     data += chr(next_sample())
 
   f.write("RIFF")

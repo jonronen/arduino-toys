@@ -73,6 +73,8 @@ enum opcode_t {
   OP_JUMP_EQUAL,
   OP_JUMP_GREATER,
   OP_RANDOM,
+  OP_LOG,
+  OP_BIT,
   OP_MAX_VALUE
 };
 
@@ -99,6 +101,8 @@ static const uint8_t g_num_reg_params[OP_MAX_VALUE+1] = {
   3, /* OP_JUMP_EQUAL */
   3, /* OP_JUMP_GREATER */
   2, /* OP_RANDOM */
+  2, /* OP_LOG */
+  2, /* OP_BIT */
   0, /* OP_MAX_VALUE */
 };
 
@@ -129,8 +133,8 @@ static const opcode_t g_medium_opcodes[] = {
   OP_LOAD,                  /* 0x02 */
   OP_STORE,                 /* 0x03 */
   OP_RANDOM,                /* 0x04 */
-  OP_MAX_VALUE,             /* 0x05 */
-  OP_MAX_VALUE,             /* 0x06 */
+  OP_LOG,                   /* 0x05 */
+  OP_BIT,                   /* 0x06 */
   OP_MAX_VALUE,             /* 0x07 */
   OP_MAX_VALUE,             /* 0x08 */
   OP_MAX_VALUE,             /* 0x09 */
@@ -457,6 +461,27 @@ uint16_t process_instruction(
       if (g_regs[param1] < g_regs[param2]) break;
     }
     break;
+  
+  case OP_LOG:
+    /* special case - log(0) = 0xff */
+    if (g_regs[param2] == 0) {
+      g_regs[param1] = 0xff;
+      break;
+    }
+
+    g_regs[param1] = 0;
+    /* use param3 as a temporary value */
+    param3 = 1;
+    while (param3 < g_regs[param2]) {
+      g_regs[param1]++;
+      param3 |= (param3*2);
+    }
+    break;
+  
+  case OP_BIT:
+    g_regs[param1] = 1<<g_regs[param2];
+    break;
+
   default:
     /* unknown instruction */
     return PROCESSING_ERROR;

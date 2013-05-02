@@ -136,6 +136,8 @@ if __name__ == "__main__":
     dest_image.write(create_mbr(total_partition_blocks))
     dest_image.write(partition)
 
+    print "Created the following image: %s" % (sys.argv[1]+".img")
+
     dest_image.close()
     f.close()
 

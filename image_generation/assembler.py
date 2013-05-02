@@ -50,6 +50,8 @@ g_ops = {
   "JUMP_EQUAL":             ("8",   ("REG", "REG", "REG")),
   "JUMP_GREATER":           ("9",   ("REG", "REG", "REG")),
   "RANDOM":                 ("04",  ("REG", "REG")),
+  "LOG":                    ("05",  ("REG", "REG")),
+  "BIT":                    ("06",  ("REG", "REG")),
 }
 
 

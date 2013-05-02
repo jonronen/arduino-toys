@@ -20,8 +20,8 @@ JUMP r3
 
 :WAIT_FOR_INPUT
 
-# timeout is three seconds
-SET_REG r1, 30
+# timeout is ten seconds
+SET_REG r1, 100
 GET_INPUT r8, r1
 
 # convert the saved value to an expected input
@@ -58,7 +58,7 @@ JUMP r3
 :COMPARE_INPUT
 
 # if r8==r1, success
-SET_REG r3, @DELAY_AND_CONTINUE
+SET_REG r3, @SUCCESS_AND_CONTINUE
 JUMP_EQUAL r1, r8, r3
 
 # else, play an error sound, delay, and return to the start
@@ -71,7 +71,7 @@ SET_REG r3, @SAVE_RAND_AND_PLAY
 JUMP r3
 
 
-:DELAY_AND_CONTINUE
+:SUCCESS_AND_CONTINUE
 SET_REG r1, 8
 DELAY r1
 SET_REG r3, @SAVE_RAND_AND_PLAY

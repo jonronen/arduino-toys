@@ -315,9 +315,20 @@ uint16_t process_instruction(
       g_delay_cnt = 0;
     }
     else {
-      if (g_delay_cnt) return PROCESSING_YIELD;
+      //
+      // we're waiting for an input and we didn't get one.
+      // this is either a timeout, or we should keep waiting.
+      //
+      if (g_delay_cnt) {
+        return PROCESSING_YIELD;
+      }
+      else {
+        g_f_waiting_for_input = 0;
+      }
     }
   }
+  // if we're not waiting for an input but g_delay_cnt is nonzero,
+  // this is a normal delay command
   else if (g_delay_cnt) return PROCESSING_YIELD;
 
   if (g_f_playing_sound_block &&

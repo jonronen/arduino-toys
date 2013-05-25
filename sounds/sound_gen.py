@@ -518,7 +518,7 @@ def next_sample():
   # low-pass filter
   #
   
-  if g_lpf_base_freq != 255:
+  if g_lpf_base_freq != 256:
     # to avoid ramping the low-pass frequency too quickly, use a counter
     g_lpf_ramp_cnt += 1
     # adjust the low-pass filter current frequency
@@ -543,7 +543,7 @@ def next_sample():
     # we can be sure that g_lpf_prev_delta will not be
     # incremented/decremented by more than 2047
     #
-    g_lpf_prev_delta += (sample-g_lpf_prev) / 0x100 * g_lpf_curr_freq
+    g_lpf_prev_delta += (sample-g_lpf_prev) / 0x10 * g_lpf_curr_freq / 0x10
     if g_lpf_prev_delta > 2047:
       g_lpf_prev_delta = 2047
     elif g_lpf_prev_delta < -2048:

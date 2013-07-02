@@ -3,7 +3,7 @@
 # To read pcb files, the pcb version (or the git source date) must be >= the file version
 FileVersion[20070407]
 
-PCB["" 600000 500000]
+PCB["" 200000 160000]
 
 Grid[2500.0 0 0 1]
 Cursor[22500 0 0.000000]
@@ -787,8 +787,8 @@ Symbol['~' 1200]
 	SymbolLine[2000 3500 2500 3000 800]
 )
 Attribute("PCB::grid::unit" "mil")
-Via[132500 40000 16100 2000 0 1000 "" ""]
-Via[37500 105000 16100 2000 0 1000 "" ""]
+Via[132500 40000 16100 2000 0 15800 "" "auto"]
+Via[37500 105000 16100 2000 0 15800 "" "auto"]
 Via[95984 83694 3600 2000 0 2000 "" "auto"]
 Via[62800 116400 3600 2000 0 2000 "" "auto"]
 Via[89384 75388 3600 2000 0 2000 "" "auto"]

@@ -74,6 +74,12 @@ filesystem.o: filesystem.cpp
 toys_main.o: toys_main.cpp
 	avr-g++ $(GPP_FLAGS) toys_main.cpp
 
+fuses:
+	$(ARDUINO_FILES)/hardware/tools/avrdude -C$(ARDUINO_FILES)/hardware/tools/avrdude.conf -v -v -v -p$(MCU) -cstk500v1 -P$(ARDUINO_PORT) -b19200 -U lfuse:w:0xe7:m -U hfuse:w:0xdf:m -U efuse:w:0xfd:m
+
+upload_no_bootloader: toys.hex
+	$(ARDUINO_FILES)/hardware/tools/avrdude -C$(ARDUINO_FILES)/hardware/tools/avrdude.conf -v -p$(MCU) -cstk500v1 -P$(ARDUINO_PORT) -b19200 -Uflash:w:toys.hex:i
+
 upload: toys.hex
 	$(ARDUINO_FILES)/hardware/tools/avrdude -C$(ARDUINO_FILES)/hardware/tools/avrdude.conf -v -p$(MCU) -carduino -P$(ARDUINO_PORT) -b115200 -D -Uflash:w:toys.hex:i
 

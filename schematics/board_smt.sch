@@ -1,4 +1,4 @@
-v 20110115 2
+v 20130925 2
 C 40000 40000 0 0 0 title-B.sym
 C 51000 45200 1 0 0 resistor-1.sym
 {
@@ -35,7 +35,7 @@ refdes=U2
 T 50900 48000 5 10 0 0 270 0 1
 symversion=0.1
 T 49500 47900 5 10 1 1 0 0 1
-value=16MHz
+value=8MHz
 T 50200 48200 5 10 0 0 180 0 1
 footprint=CRYSTAL 300
 }

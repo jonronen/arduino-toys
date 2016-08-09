@@ -31,7 +31,7 @@
 #include "engine.h"
 
 
-#define SOUND_FREQ 32000
+#define SOUND_FREQ 16000
 
 
 static uint8_t g_play_buff[BUFF_HALF_SIZE*2];
@@ -89,7 +89,7 @@ void sound_setup()
   // Set the compare register (OCR1A).
   // OCR1A is a 16-bit register, so we have to do this with
   // interrupts disabled to be safe.
-  OCR1A = (F_CPU / SOUND_FREQ);    // 16e6 / 32000 for Arduino Uno
+  OCR1A = (F_CPU / SOUND_FREQ);    // 8e6 / 16000 for Arduino Uno
   
   // Enable interrupt when TCNT1 == OCR1A (p.136)
   TIMSK1 |= _BV(OCIE1A);

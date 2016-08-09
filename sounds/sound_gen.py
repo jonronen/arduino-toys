@@ -471,8 +471,8 @@ def next_sample():
   #
   
   g_phase += vibrated_freq
-  if g_phase & 0x8000:
-    g_phase &= 0x7FFF
+  if g_phase & 0x4000:
+    g_phase &= 0x3FFF
     
     #
     # wave length wraparound. this is a good time to make changes in the frequency
@@ -693,7 +693,7 @@ if __name__ == "__main__":
   f.write("RIFF")
   f.write(struct.pack("<I", len(data)+0x24))
   f.write("WAVEfmt ")
-  f.write(struct.pack("<IHHIIHH", 0x10, 1, 1, 32000, 32000, 1, 8))
+  f.write(struct.pack("<IHHIIHH", 0x10, 1, 1, 16000, 16000, 1, 8))
   f.write("data")
   f.write(struct.pack("<I", len(data)))
   f.write(data)

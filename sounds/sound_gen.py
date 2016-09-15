@@ -18,7 +18,7 @@ g_phase = 0
 # envelope
 g_env_stage = 0
 g_env_time = 0
-g_env_lengths = [0,0]
+g_env_lengths = [0,0,0]
 
 # low-pass filter
 g_lpf_resonance = 0
@@ -353,7 +353,8 @@ def setup(wave_type, freq,
   g_base_freq = freq
 
   g_env_lengths[0] = 1000
-  g_env_lengths[1] = 1500
+  g_env_lengths[1] = 5000
+  g_env_lengths[2] = 6000
 
   g_freq_ramp = freq_ramp
   g_freq_slur = freq_slur
@@ -446,11 +447,15 @@ def next_sample():
     env_vol = g_env_time / (g_env_lengths[0]/0x100 + 1)
   elif g_env_stage == 2:
     g_env_time += 1
-    if g_env_time >= g_env_lengths[1]:
+    if g_env_time >= g_env_lengths[2]:
       g_env_time = 0
       g_env_stage = 3
     env_vol=255-(g_env_time / (g_env_lengths[1]/0x100 + 1))
   elif g_env_stage == 1:
+    g_env_time += 1
+    if g_env_time >= g_env_lengths[1]:
+      g_env_time = 0
+      g_env_stage = 2
     env_vol = 255
   else:
     env_vol = 0
@@ -641,8 +646,8 @@ if __name__ == "__main__":
       options.wave_type
     sys.exit()
 
-  if options.freq < 20 or options.freq > 14000:
-    print "wrong frequency %d. expected values are 20 to 14000" % options.freq
+  if options.freq < 20 or options.freq > 7000:
+    print "wrong frequency %d. expected values are 20 to 7000" % options.freq
     sys.exit()
 
   if options.freq_ramp < -128 or options.freq_ramp > 127:

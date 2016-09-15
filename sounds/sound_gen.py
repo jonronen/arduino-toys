@@ -18,7 +18,7 @@ g_phase = 0
 # envelope
 g_env_stage = 0
 g_env_time = 0
-g_env_lengths = [0,0,0]
+g_env_lengths = [500,3000,4000]
 
 # low-pass filter
 g_lpf_resonance = 0
@@ -342,7 +342,7 @@ def setup(wave_type, freq,
           vib_speed=1, vib_strength=0,
           tremolo=False, distortion=False
          ):
-  global g_wave_type, g_env_lengths, g_base_freq
+  global g_wave_type, g_base_freq
   global g_freq_ramp, g_freq_slur, g_freq_ramp_cnt
   global g_lpf_base_freq, g_lpf_ramp, g_lpf_resonance
   global g_vib_speed, g_vib_strength
@@ -351,10 +351,6 @@ def setup(wave_type, freq,
   # set up the initial values for all the controls
   g_wave_type = wave_type
   g_base_freq = freq
-
-  g_env_lengths[0] = 1000
-  g_env_lengths[1] = 5000
-  g_env_lengths[2] = 6000
 
   g_freq_ramp = freq_ramp
   g_freq_slur = freq_slur
@@ -374,7 +370,7 @@ def setup(wave_type, freq,
 
 
 def reset_sample():
-  global g_wave_type, g_env_lengths, g_base_freq
+  global g_wave_type, g_base_freq
   global g_freq_ramp, g_freq_slur, g_freq_ramp_cnt
   global g_lpf_base_freq, g_lpf_ramp, g_lpf_resonance
   global g_vib_speed, g_vib_strength
@@ -450,7 +446,7 @@ def next_sample():
     if g_env_time >= g_env_lengths[2]:
       g_env_time = 0
       g_env_stage = 3
-    env_vol=255-(g_env_time / (g_env_lengths[1]/0x100 + 1))
+    env_vol=255-(g_env_time / (g_env_lengths[2]/0x100 + 1))
   elif g_env_stage == 1:
     g_env_time += 1
     if g_env_time >= g_env_lengths[1]:
@@ -476,7 +472,7 @@ def next_sample():
   #
   
   g_phase += vibrated_freq
-  if g_phase & 0x4000:
+  if g_phase & 0xC000:
     g_phase &= 0x3FFF
     
     #
@@ -505,7 +501,8 @@ def next_sample():
   #
   
   # base waveform
-  fp = g_phase >> 4 # keep fp between zero and 2047
+  fp = g_phase >> 3 # keep fp between zero and 2047
+  if (fp > 2047): raise ValueError ("fp is %d" % fp)
   sample = 0
   if g_wave_type < 2:
     if g_wave_type == 0: # rough sawtooth
@@ -692,7 +689,7 @@ if __name__ == "__main__":
   )
 
   data = ""
-  for i in range(20000):
+  for i in range(sum(g_env_lengths)):
     data += chr(next_sample())
 
   f.write("RIFF")

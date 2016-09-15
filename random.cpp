@@ -35,7 +35,7 @@
 #endif
 
 
-#define STATE_LEN 16
+#define STATE_LEN 256
 static uint8_t g_state[STATE_LEN] = {
   2,  6,  8, 15,  1,  9,  7,  3,
   5,  4, 13, 10, 11,  0, 12, 14
@@ -100,7 +100,10 @@ void random_init()
 {
   uint16_t tmp;
 
-  set_adc_prescale(32);
+  set_adc_prescale(128);
+
+  // enable A2D conversions
+  sbi (ADCSRA, ADEN);
   
   tmp = analogRead(RANDOM_PIN);
   put_key((const uint8_t*)&tmp, 2);

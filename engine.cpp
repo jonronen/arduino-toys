@@ -179,8 +179,8 @@ static uint8_t get_input()
     ans |= 4;
   if (digitalRead(INPUT3_PIN) == 0)
     ans |= 8;
-  if (analogRead(INPUT4_PIN) <= 0x200) /* input4 is analog */
-    ans |= 16;
+  //if (analogRead(INPUT4_PIN) <= 0x40) /* input4 is analog */
+  //  ans |= 16;
 
   if (ans != 0) {
     /* there is an input. seed the random number generator */

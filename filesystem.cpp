@@ -80,7 +80,7 @@ int8_t init_fs()
   partitionEntry* p_part;
   partitionToc* p_toc;
   
-  g_sdc.init(SPI_HALF_SPEED);
+  g_sdc.init(SPI_FULL_SPEED);
   g_sdc.partialBlockRead(1);
   
   res = g_sdc.readBlock(0, g_fs_buf);

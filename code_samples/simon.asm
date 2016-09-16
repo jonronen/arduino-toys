@@ -112,7 +112,9 @@ JUMP_GREATER r5, r2, r3
 JUMP_GREATER r2, r5, r3
 
 # correct key - play it and move to the next one
+LIGHT_ON r4
 PLAY_SOUND_BLOCKING r4
+LIGHT_OFF r4
 ADD_REGS r13, r13, r1
 
 # end of sequence?

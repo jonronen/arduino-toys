@@ -100,10 +100,13 @@ void random_init()
 {
   uint16_t tmp;
 
-  set_adc_prescale(128);
+  set_adc_prescale(32);
 
   // enable A2D conversions
   sbi (ADCSRA, ADEN);
+
+  // AREF pin is connected to AVCC
+  analogReference (0);
   
   tmp = analogRead(RANDOM_PIN);
   put_key((const uint8_t*)&tmp, 2);

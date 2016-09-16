@@ -32,7 +32,9 @@
 #define INPUT1_PIN 9
 #define INPUT2_PIN 4
 #define INPUT3_PIN 2
-#define INPUT4_PIN (5) /* analog */
+
+// analog pin for the fifth button
+#define INPUT4_PIN 0
 
 
 #define LED0_PIN 7

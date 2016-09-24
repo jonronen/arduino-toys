@@ -8,7 +8,7 @@ JUMP r3
 :SAVE_RAND_AND_PLAY
 
 # get a random value between zero and four
-SET_REG r0, 5
+SET_REG r0, 4
 RANDOM r1, r0
 
 # if the random is equal to the last one, get another random
@@ -20,9 +20,7 @@ SET_REG r10, 0
 ADD_REGS r9, r1, r10
 
 # light and play
-LIGHT_ON r1
 PLAY_SOUND_BLOCKING r1
-LIGHT_OFF r1
 
 # save the new random
 SET_REG r2, 0
@@ -95,9 +93,13 @@ JUMP r3
 
 
 :SUCCESS_AND_CONTINUE
-# play it, delay, and choose a new random
+# randomly choose a success sound, delay, and choose a new random
+SET_REG r4, 5
+RANDOM r5, r4
+SET_REG r4, 6
+ADD_REGS r5, r5, r4
 LIGHT_ON r0
-PLAY_SOUND_BLOCKING r0
+PLAY_SOUND_BLOCKING r5
 LIGHT_OFF r0
 SET_REG r1, 8
 DELAY r1
